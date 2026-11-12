@@ -1,0 +1,556 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dokument1 – Schreibwerk</title>
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<!-- ===================== Titelleiste ===================== -->
+<header id="titlebar">
+  <div class="tb-left">
+    <div class="app-logo" title="Schreibwerk"><span>S</span></div>
+    <button class="qa" data-cmd="save" data-icon="save" title="Speichern (Strg+S)"></button>
+    <button class="qa" data-cmd="undo" data-icon="undo-2" title="Rückgängig (Strg+Z)"></button>
+    <button class="qa" data-cmd="redo" data-icon="redo-2" title="Wiederholen (Strg+Y)"></button>
+  </div>
+  <div class="tb-center">
+    <span id="docTitle">Dokument1</span><span id="dirtyMark" title="Ungespeicherte Änderungen"></span><span class="tb-app"> – Schreibwerk</span>
+  </div>
+  <div class="tb-right">
+    <div class="tb-search">
+      <span data-icon="search"></span>
+      <input id="quickSearch" type="search" placeholder="Suchen (Strg+F)" autocomplete="off">
+    </div>
+    <span class="offline-badge" title="Alle Daten bleiben auf diesem Computer">Offline</span>
+  </div>
+</header>
+
+<!-- ===================== Menüband ===================== -->
+<nav id="tabs" role="tablist">
+  <button class="tab tab-file" data-tab="datei">Datei</button>
+  <button class="tab active" data-tab="start">Start</button>
+  <button class="tab" data-tab="einfuegen">Einfügen</button>
+  <button class="tab" data-tab="layout">Layout</button>
+  <button class="tab" data-tab="referenzen">Referenzen</button>
+  <button class="tab" data-tab="ueberpruefen">Überprüfen</button>
+  <button class="tab" data-tab="ansicht">Ansicht</button>
+  <button class="tab tab-context" data-tab="tabelle" hidden>Tabellenlayout</button>
+  <button class="tab tab-context" data-tab="bild" hidden>Bildformat</button>
+  <span class="tabs-spacer"></span>
+  <button class="tab-collapse" id="ribbonToggle" title="Menüband reduzieren/anzeigen" data-icon="chevron-down"></button>
+</nav>
+
+<section id="ribbon">
+
+  <!-- START -->
+  <div class="panel active" data-panel="start">
+    <div class="grp">
+      <div class="grp-body">
+        <button class="big" data-cmd="paste" data-icon="clipboard-paste" title="Einfügen (Strg+V)"><span>Einfügen</span></button>
+        <div class="stack">
+          <button class="sm" data-cmd="cut" data-icon="scissors" title="Ausschneiden (Strg+X)"><span>Ausschneiden</span></button>
+          <button class="sm" data-cmd="copy" data-icon="copy" title="Kopieren (Strg+C)"><span>Kopieren</span></button>
+          <button class="sm" data-cmd="formatPainter" data-icon="paintbrush" title="Format übertragen – Formatierung der Auswahl auf anderen Text übertragen"><span>Format übertragen</span></button>
+        </div>
+      </div>
+      <div class="grp-label">Zwischenablage</div>
+    </div>
+
+    <div class="grp">
+      <div class="grp-body col">
+        <div class="row">
+          <input id="fontName" class="combo font-combo" list="fontList" title="Schriftart" spellcheck="false">
+          <datalist id="fontList"></datalist>
+          <input id="fontSize" class="combo size-combo" list="sizeList" title="Schriftgrad" spellcheck="false">
+          <datalist id="sizeList"></datalist>
+          <button class="ic" data-cmd="growFont" data-icon="a-arrow-up" title="Schriftgrad vergrößern (Strg+>)"></button>
+          <button class="ic" data-cmd="shrinkFont" data-icon="a-arrow-down" title="Schriftgrad verkleinern (Strg+<)"></button>
+          <button class="ic dd" data-menu="caseMenu" data-icon="case-sensitive" title="Groß-/Kleinschreibung"></button>
+          <button class="ic" data-cmd="clearFormat" data-icon="remove-formatting" title="Alle Formatierungen löschen"></button>
+        </div>
+        <div class="row">
+          <button class="ic" data-cmd="bold" data-icon="bold" title="Fett (Strg+B / Strg+Umschalt+F)" data-state="bold"></button>
+          <button class="ic" data-cmd="italic" data-icon="italic" title="Kursiv (Strg+I / Strg+Umschalt+K)" data-state="italic"></button>
+          <button class="ic" data-cmd="underline" data-icon="underline" title="Unterstrichen (Strg+U)" data-state="underline"></button>
+          <button class="ic" data-cmd="strikeThrough" data-icon="strikethrough" title="Durchgestrichen" data-state="strikeThrough"></button>
+          <button class="ic" data-cmd="subscript" data-icon="subscript" title="Tiefgestellt (Strg+#)" data-state="subscript"></button>
+          <button class="ic" data-cmd="superscript" data-icon="superscript" title="Hochgestellt (Strg+Umschalt++)" data-state="superscript"></button>
+          <span class="vsep"></span>
+          <div class="split">
+            <button class="ic colorbtn" data-cmd="highlight" data-icon="highlighter" title="Texthervorhebungsfarbe"><i class="swatch" id="hlSwatch" style="background:#ffff00"></i></button>
+            <button class="caret" data-menu="highlightMenu" title="Hervorhebungsfarbe wählen" data-icon="chevron-down"></button>
+          </div>
+          <div class="split">
+            <button class="ic colorbtn" data-cmd="foreColor" data-icon="baseline" title="Schriftfarbe"><i class="swatch" id="fcSwatch" style="background:#c00000"></i></button>
+            <button class="caret" data-menu="colorMenu" title="Schriftfarbe wählen" data-icon="chevron-down"></button>
+          </div>
+        </div>
+      </div>
+      <div class="grp-label">Schriftart</div>
+    </div>
+
+    <div class="grp">
+      <div class="grp-body col">
+        <div class="row">
+          <div class="split">
+            <button class="ic" data-cmd="bullets" data-icon="list" title="Aufzählungszeichen" data-state="insertUnorderedList"></button>
+            <button class="caret" data-menu="bulletMenu" data-icon="chevron-down" title="Aufzählungszeichen wählen"></button>
+          </div>
+          <div class="split">
+            <button class="ic" data-cmd="numbering" data-icon="list-ordered" title="Nummerierung" data-state="insertOrderedList"></button>
+            <button class="caret" data-menu="numberMenu" data-icon="chevron-down" title="Nummerierungsformat wählen"></button>
+          </div>
+          <button class="ic" data-cmd="outdent" data-icon="indent-decrease" title="Einzug verkleinern"></button>
+          <button class="ic" data-cmd="indent" data-icon="indent-increase" title="Einzug vergrößern"></button>
+          <span class="vsep"></span>
+          <button class="ic" data-cmd="toggleMarks" data-icon="pilcrow" title="Alle anzeigen – Formatierungszeichen (Strg+*)" id="btnMarks"></button>
+        </div>
+        <div class="row">
+          <button class="ic" data-cmd="alignLeft" data-icon="text-align-start" title="Linksbündig (Strg+L)" data-align="left"></button>
+          <button class="ic" data-cmd="alignCenter" data-icon="text-align-center" title="Zentriert (Strg+E)" data-align="center"></button>
+          <button class="ic" data-cmd="alignRight" data-icon="text-align-end" title="Rechtsbündig (Strg+R)" data-align="right"></button>
+          <button class="ic" data-cmd="alignJustify" data-icon="text-align-justify" title="Blocksatz (Strg+J)" data-align="justify"></button>
+          <span class="vsep"></span>
+          <button class="ic dd" data-menu="spacingMenu" data-icon="chevrons-up-down" title="Zeilen- und Absatzabstand"></button>
+          <div class="split">
+            <button class="ic colorbtn" data-cmd="shading" data-icon="paint-bucket" title="Absatz-Schattierung"><i class="swatch" id="shSwatch" style="background:#dbe5f1"></i></button>
+            <button class="caret" data-menu="shadingMenu" data-icon="chevron-down" title="Schattierung wählen"></button>
+          </div>
+          <button class="ic dd" data-menu="borderMenu" data-icon="square-square" title="Rahmenlinien"></button>
+        </div>
+      </div>
+      <div class="grp-label">Absatz <button class="launcher" data-cmd="paragraphDialog" title="Absatzeinstellungen"></button></div>
+    </div>
+
+    <div class="grp grp-styles">
+      <div class="grp-body">
+        <div id="styleGallery" class="style-gallery"></div>
+      </div>
+      <div class="grp-label">Formatvorlagen</div>
+    </div>
+
+    <div class="grp">
+      <div class="grp-body col">
+        <button class="sm" data-cmd="find" data-icon="search" title="Suchen (Strg+F)"><span>Suchen</span></button>
+        <button class="sm" data-cmd="replace" data-icon="replace" title="Ersetzen (Strg+H)"><span>Ersetzen</span></button>
+        <button class="sm" data-cmd="selectAll" data-icon="text-select" title="Alles markieren (Strg+A)"><span>Markieren</span></button>
+      </div>
+      <div class="grp-label">Bearbeiten</div>
+    </div>
+  </div>
+
+  <!-- EINFÜGEN -->
+  <div class="panel" data-panel="einfuegen">
+    <div class="grp">
+      <div class="grp-body">
+        <button class="big" data-cmd="pageBreak" data-icon="separator-horizontal" title="Seitenumbruch (Strg+Enter)"><span>Seiten&shy;umbruch</span></button>
+      </div>
+      <div class="grp-label">Seiten</div>
+    </div>
+    <div class="grp">
+      <div class="grp-body">
+        <button class="big dd" data-menu="tableMenu" data-icon="table" title="Tabelle einfügen"><span>Tabelle</span></button>
+      </div>
+      <div class="grp-label">Tabellen</div>
+    </div>
+    <div class="grp">
+      <div class="grp-body">
+        <button class="big" data-cmd="insertImage" data-icon="image" title="Bild von diesem Gerät einfügen"><span>Bilder</span></button>
+      </div>
+      <div class="grp-label">Illustrationen</div>
+    </div>
+    <div class="grp">
+      <div class="grp-body">
+        <button class="big" data-cmd="link" data-icon="link" title="Link einfügen (Strg+K)"><span>Link</span></button>
+      </div>
+      <div class="grp-label">Links</div>
+    </div>
+    <div class="grp">
+      <div class="grp-body">
+        <button class="big" data-cmd="headerFooter" data-arg="header" data-icon="panel-top" title="Kopfzeile bearbeiten"><span>Kopfzeile</span></button>
+        <button class="big" data-cmd="headerFooter" data-arg="footer" data-icon="panel-bottom" title="Fußzeile bearbeiten"><span>Fußzeile</span></button>
+        <button class="big dd" data-menu="pageNumMenu" data-icon="hash" title="Seitenzahlen"><span>Seitenzahl</span></button>
+      </div>
+      <div class="grp-label">Kopf- und Fußzeile</div>
+    </div>
+    <div class="grp">
+      <div class="grp-body col">
+        <button class="sm" data-cmd="insertDate" data-icon="calendar" title="Datum und Uhrzeit"><span>Datum und Uhrzeit</span></button>
+        <button class="sm" data-cmd="insertHr" data-icon="minus" title="Horizontale Linie"><span>Horizontale Linie</span></button>
+        <button class="sm" data-cmd="textbox" data-icon="square-dashed" title="Absatz mit Rahmen umgeben"><span>Textrahmen</span></button>
+      </div>
+      <div class="grp-label">Text</div>
+    </div>
+    <div class="grp">
+      <div class="grp-body">
+        <button class="big dd" data-menu="symbolMenu" data-icon="omega" title="Symbol einfügen"><span>Symbol</span></button>
+      </div>
+      <div class="grp-label">Symbole</div>
+    </div>
+  </div>
+
+  <!-- LAYOUT -->
+  <div class="panel" data-panel="layout">
+    <div class="grp">
+      <div class="grp-body">
+        <button class="big dd" data-menu="marginMenu" data-icon="square-dashed" title="Seitenränder"><span>Seiten&shy;ränder</span></button>
+        <button class="big dd" data-menu="orientMenu" data-icon="rectangle-vertical" title="Ausrichtung"><span>Aus&shy;richtung</span></button>
+        <button class="big dd" data-menu="sizeMenu" data-icon="file" title="Format"><span>Format</span></button>
+        <button class="big" data-cmd="pageBreak" data-icon="separator-horizontal" title="Seitenumbruch einfügen"><span>Umbrüche</span></button>
+      </div>
+      <div class="grp-label">Seite einrichten <button class="launcher" data-cmd="pageSetup" title="Seite einrichten"></button></div>
+    </div>
+    <div class="grp">
+      <div class="grp-body col">
+        <div class="lbl-row"><b>Einzug</b></div>
+        <label class="field">Links <input type="number" id="indLeft" step="0.25" min="0" max="15"> cm</label>
+        <label class="field">Rechts <input type="number" id="indRight" step="0.25" min="0" max="15"> cm</label>
+      </div>
+      <div class="grp-body col">
+        <div class="lbl-row"><b>Abstand</b></div>
+        <label class="field">Vor <input type="number" id="spBefore" step="6" min="0" max="200"> Pt.</label>
+        <label class="field">Nach <input type="number" id="spAfter" step="6" min="0" max="200"> Pt.</label>
+      </div>
+      <div class="grp-label">Absatz <button class="launcher" data-cmd="paragraphDialog" title="Absatzeinstellungen"></button></div>
+    </div>
+  </div>
+
+  <!-- REFERENZEN -->
+  <div class="panel" data-panel="referenzen">
+    <div class="grp">
+      <div class="grp-body">
+        <button class="big" data-cmd="insertToc" data-icon="table-of-contents" title="Automatisches Inhaltsverzeichnis aus den Überschriften"><span>Inhalts&shy;verzeichnis</span></button>
+        <div class="stack">
+          <button class="sm" data-cmd="updateToc" data-icon="refresh-cw" title="Inhaltsverzeichnis aktualisieren"><span>Tabelle aktualisieren</span></button>
+        </div>
+      </div>
+      <div class="grp-label">Inhaltsverzeichnis</div>
+    </div>
+    <div class="grp">
+      <div class="grp-body">
+        <button class="big" data-cmd="footnote" data-icon="superscript" title="Fußnote einfügen (Strg+Alt+F)"><span>Fußnote einfügen</span></button>
+      </div>
+      <div class="grp-label">Fußnoten</div>
+    </div>
+  </div>
+
+  <!-- ÜBERPRÜFEN -->
+  <div class="panel" data-panel="ueberpruefen">
+    <div class="grp">
+      <div class="grp-body">
+        <button class="big" data-cmd="toggleSpell" data-icon="spell-check" title="Rechtschreibprüfung ein/aus (F7)" id="btnSpell"><span>Recht&shy;schreibung</span></button>
+        <button class="big" data-cmd="wordCount" data-icon="sigma" title="Wörter zählen"><span>Wörter zählen</span></button>
+      </div>
+      <div class="grp-label">Rechtschreibung</div>
+    </div>
+  </div>
+
+  <!-- ANSICHT -->
+  <div class="panel" data-panel="ansicht">
+    <div class="grp">
+      <div class="grp-body col">
+        <label class="chk"><input type="checkbox" id="chkRuler" checked> Lineal</label>
+        <label class="chk"><input type="checkbox" id="chkNav"> Navigationsbereich</label>
+        <label class="chk"><input type="checkbox" id="chkMarks"> Formatierungszeichen</label>
+      </div>
+      <div class="grp-label">Anzeigen</div>
+    </div>
+    <div class="grp">
+      <div class="grp-body">
+        <button class="big" data-cmd="zoomTo" data-arg="1" data-icon="search" title="Zoom 100 %"><span>100 %</span></button>
+        <button class="big" data-cmd="zoomFit" data-arg="page" data-icon="scan" title="Eine Seite"><span>Eine Seite</span></button>
+        <button class="big" data-cmd="zoomFit" data-arg="width" data-icon="maximize" title="Seitenbreite"><span>Seiten&shy;breite</span></button>
+      </div>
+      <div class="grp-label">Zoom</div>
+    </div>
+    <div class="grp">
+      <div class="grp-body">
+        <button class="big" data-cmd="toggleDark" data-icon="moon" title="Dunkle Oberfläche (das Dokument bleibt weiß)"><span>Dunkel&shy;modus</span></button>
+        <button class="big" data-cmd="shortcuts" data-icon="keyboard" title="Tastenkombinationen"><span>Tasten&shy;kürzel</span></button>
+      </div>
+      <div class="grp-label">Darstellung</div>
+    </div>
+  </div>
+
+  <!-- TABELLENLAYOUT (kontextabhängig) -->
+  <div class="panel" data-panel="tabelle">
+    <div class="grp">
+      <div class="grp-body col">
+        <button class="sm" data-cmd="tblDelRow" data-icon="trash-2" title="Zeile löschen"><span>Zeile löschen</span></button>
+        <button class="sm" data-cmd="tblDelCol" data-icon="trash-2" title="Spalte löschen"><span>Spalte löschen</span></button>
+        <button class="sm" data-cmd="tblDelTable" data-icon="trash-2" title="Tabelle löschen"><span>Tabelle löschen</span></button>
+      </div>
+      <div class="grp-label">Löschen</div>
+    </div>
+    <div class="grp">
+      <div class="grp-body">
+        <button class="big" data-cmd="tblRowAbove" data-icon="arrow-up-to-line" title="Zeile oberhalb einfügen"><span>Oberhalb einfügen</span></button>
+        <button class="big" data-cmd="tblRowBelow" data-icon="arrow-down-to-line" title="Zeile unterhalb einfügen"><span>Unterhalb einfügen</span></button>
+        <button class="big" data-cmd="tblColLeft" data-icon="arrow-left-to-line" title="Spalte links einfügen"><span>Links einfügen</span></button>
+        <button class="big" data-cmd="tblColRight" data-icon="arrow-right-to-line" title="Spalte rechts einfügen"><span>Rechts einfügen</span></button>
+      </div>
+      <div class="grp-label">Zeilen und Spalten</div>
+    </div>
+    <div class="grp">
+      <div class="grp-body col">
+        <button class="sm" data-cmd="tblMerge" data-icon="table-cells-merge" title="Mit rechter Zelle verbinden"><span>Zellen verbinden (→)</span></button>
+        <button class="sm" data-cmd="tblSplit" data-icon="table-cells-split" title="Verbundene Zelle teilen"><span>Zellen teilen</span></button>
+        <button class="sm" data-cmd="tblEqual" data-icon="columns-3" title="Spaltenbreite verteilen"><span>Spalten verteilen</span></button>
+      </div>
+      <div class="grp-label">Zusammenführen</div>
+    </div>
+    <div class="grp">
+      <div class="grp-body col">
+        <label class="chk"><input type="checkbox" id="tblHeader"> Überschriftenzeile</label>
+        <label class="chk"><input type="checkbox" id="tblBorders" checked> Rahmenlinien</label>
+        <div class="split">
+          <button class="sm colorbtn" data-cmd="cellShade" data-icon="paint-bucket" title="Zellschattierung"><span>Schattierung</span><i class="swatch" id="cellSwatch" style="background:#d9e2f3"></i></button>
+          <button class="caret" data-menu="cellShadeMenu" data-icon="chevron-down" title="Zellfarbe wählen"></button>
+        </div>
+      </div>
+      <div class="grp-label">Tabellenformat</div>
+    </div>
+  </div>
+
+  <!-- BILDFORMAT (kontextabhängig) -->
+  <div class="panel" data-panel="bild">
+    <div class="grp">
+      <div class="grp-body">
+        <label class="field">Breite <input type="number" id="imgWidth" step="0.5" min="0.5" max="40"> cm</label>
+        <label class="field">Höhe <input type="number" id="imgHeight" step="0.5" min="0.5" max="40"> cm</label>
+        <button class="sm" data-cmd="imgReset" data-icon="refresh-cw"><span>Originalgröße</span></button>
+      </div>
+      <div class="grp-label">Größe</div>
+    </div>
+    <div class="grp">
+      <div class="grp-body">
+        <button class="ic" data-cmd="alignLeft" data-icon="text-align-start" title="Links"></button>
+        <button class="ic" data-cmd="alignCenter" data-icon="text-align-center" title="Zentriert"></button>
+        <button class="ic" data-cmd="alignRight" data-icon="text-align-end" title="Rechts"></button>
+        <button class="sm" data-cmd="imgBorder" data-icon="square-square"><span>Rahmen</span></button>
+        <button class="sm" data-cmd="imgDelete" data-icon="trash-2"><span>Löschen</span></button>
+      </div>
+      <div class="grp-label">Anordnen</div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== Arbeitsbereich ===================== -->
+<main id="workspace">
+  <aside id="navPane" hidden>
+    <div class="nav-head"><b>Navigation</b><button class="ic" data-cmd="closeNav" data-icon="x" title="Schließen"></button></div>
+    <div class="nav-search"><input id="navSearch" type="search" placeholder="Dokument durchsuchen"></div>
+    <div class="nav-tabs"><span>Überschriften</span></div>
+    <div id="navList"></div>
+    <div id="navResults"></div>
+  </aside>
+  <div id="canvas" tabindex="-1">
+    <div id="rulerWrap"><div id="ruler"></div></div>
+    <div id="zoomBox">
+      <div id="paper">
+        <div id="pages"></div>
+        <div id="editor" contenteditable="true" spellcheck="true" lang="de-DE"><p><br></p></div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- ===================== Statusleiste ===================== -->
+<footer id="statusbar">
+  <span id="stPage">Seite 1 von 1</span>
+  <span id="stWords" class="st-click" title="Wörter zählen">0 Wörter</span>
+  <span id="stLang">Deutsch (Deutschland)</span>
+  <span id="stSaved"></span>
+  <span class="st-spacer"></span>
+  <button class="st-btn" data-cmd="zoomOut" data-icon="minus" title="Verkleinern"></button>
+  <input id="zoomSlider" type="range" min="25" max="300" step="5" value="100" title="Zoom">
+  <button class="st-btn" data-cmd="zoomIn" data-icon="plus" title="Vergrößern" id="zoomInBtn"></button>
+  <span id="zoomPct" class="st-click" title="Zoom auf 100 %">100 %</span>
+</footer>
+
+<!-- ===================== Backstage (Datei) ===================== -->
+<div id="backstage" hidden>
+  <div class="bs-side">
+    <button class="bs-back" data-cmd="closeBackstage" data-icon="arrow-left" title="Zurück zum Dokument"></button>
+    <button class="bs-item active" data-bs="neu" data-icon="file-plus"><span>Neu</span></button>
+    <button class="bs-item" data-bs="oeffnen" data-icon="folder-open"><span>Öffnen</span></button>
+    <button class="bs-item" data-cmd="save" data-icon="save"><span>Speichern</span></button>
+    <button class="bs-item" data-cmd="saveAs" data-icon="file-down"><span>Speichern unter</span></button>
+    <button class="bs-item" data-cmd="exportPdf" data-icon="file-output"><span>Als PDF exportieren</span></button>
+    <button class="bs-item" data-cmd="print" data-icon="printer"><span>Drucken</span></button>
+    <div class="bs-sep"></div>
+    <button class="bs-item" data-bs="info" data-icon="info"><span>Info</span></button>
+  </div>
+  <div class="bs-main">
+    <section class="bs-page active" data-bspage="neu">
+      <h1>Neu</h1>
+      <div class="tpl-grid">
+        <button class="tpl" data-tpl="blank"><div class="tpl-thumb"></div><span>Leeres Dokument</span></button>
+        <button class="tpl" data-tpl="brief"><div class="tpl-thumb tpl-brief"><i></i><i></i><i></i><i></i><i></i></div><span>Brief (DIN 5008)</span></button>
+        <button class="tpl" data-tpl="bericht"><div class="tpl-thumb tpl-bericht"><i></i><i></i><i></i><i></i><i></i></div><span>Bericht</span></button>
+        <button class="tpl" data-tpl="protokoll"><div class="tpl-thumb tpl-protokoll"><i></i><i></i><i></i><i></i><i></i></div><span>Protokoll</span></button>
+      </div>
+    </section>
+    <section class="bs-page" data-bspage="oeffnen">
+      <h1>Öffnen</h1>
+      <div class="open-drop" id="openDrop">
+        <span data-icon="folder-open"></span>
+        <p><b>Word-Datei (.docx) öffnen</b></p>
+        <p class="muted">Klicken zum Durchsuchen oder Datei hierher ziehen. Auch .txt und .html werden gelesen.</p>
+        <button class="btn primary" data-cmd="open">Durchsuchen …</button>
+      </div>
+      <div id="restoreBox" hidden>
+        <h2>Wiederherstellen</h2>
+        <p class="muted">Automatisch gesicherter Entwurf (nur auf diesem Computer):</p>
+        <button class="btn" id="restoreBtn"></button>
+      </div>
+    </section>
+    <section class="bs-page" data-bspage="info">
+      <h1>Info</h1>
+      <div class="info-grid">
+        <div>
+          <h2>Schreibwerk</h2>
+          <p>Offline-Textverarbeitung im Stil von Word. Dateien werden als Word-Dokument (.docx) gespeichert und lassen sich in Microsoft Word, LibreOffice und Google Docs öffnen.</p>
+          <p><b>Datenschutz:</b> Schreibwerk sendet nichts ins Internet. Ein automatischer Sicherungsentwurf liegt nur im Browser-Speicher dieses Computers.</p>
+          <p class="muted" id="verInfo"></p>
+        </div>
+        <div>
+          <h2>Eigenschaften</h2>
+          <dl id="propList"></dl>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<!-- ===================== Menüs ===================== -->
+<div id="menus">
+  <div class="menu" id="caseMenu">
+    <button data-cmd="changeCase" data-arg="sentence">Satzanfang groß</button>
+    <button data-cmd="changeCase" data-arg="lower">kleinbuchstaben</button>
+    <button data-cmd="changeCase" data-arg="upper">GROSSBUCHSTABEN</button>
+    <button data-cmd="changeCase" data-arg="title">Ersten Buchstaben Im Wort Großschreiben</button>
+    <button data-cmd="changeCase" data-arg="toggle">gROSS-/kLEINSCHREIBUNG umkehren</button>
+  </div>
+  <div class="menu color-menu" id="colorMenu" data-target="foreColor"></div>
+  <div class="menu color-menu" id="highlightMenu" data-target="highlight"></div>
+  <div class="menu color-menu" id="shadingMenu" data-target="shading"></div>
+  <div class="menu color-menu" id="cellShadeMenu" data-target="cellShade"></div>
+  <div class="menu" id="bulletMenu">
+    <div class="menu-title">Aufzählungszeichen</div>
+    <div class="glyph-row">
+      <button data-cmd="bullets" data-arg="disc" title="Punkt">●</button>
+      <button data-cmd="bullets" data-arg="circle" title="Kreis">○</button>
+      <button data-cmd="bullets" data-arg="square" title="Quadrat">■</button>
+      <button data-cmd="bullets" data-arg="dash" title="Strich">–</button>
+      <button data-cmd="bullets" data-arg="arrow" title="Pfeil">➢</button>
+      <button data-cmd="bullets" data-arg="check" title="Häkchen">✓</button>
+    </div>
+  </div>
+  <div class="menu" id="numberMenu">
+    <div class="menu-title">Nummerierungsformat</div>
+    <div class="glyph-row wide">
+      <button data-cmd="numbering" data-arg="decimal">1. 2. 3.</button>
+      <button data-cmd="numbering" data-arg="decimal-paren">1) 2) 3)</button>
+      <button data-cmd="numbering" data-arg="lower-alpha">a) b) c)</button>
+      <button data-cmd="numbering" data-arg="upper-alpha">A. B. C.</button>
+      <button data-cmd="numbering" data-arg="lower-roman">i. ii. iii.</button>
+      <button data-cmd="numbering" data-arg="upper-roman">I. II. III.</button>
+    </div>
+    <div class="menu-sep"></div>
+    <button data-cmd="restartNumbering">Neu beginnen mit 1</button>
+  </div>
+  <div class="menu" id="spacingMenu">
+    <div class="menu-title">Zeilenabstand</div>
+    <button data-cmd="lineSpacing" data-arg="1">1,0</button>
+    <button data-cmd="lineSpacing" data-arg="1.15">1,15</button>
+    <button data-cmd="lineSpacing" data-arg="1.5">1,5</button>
+    <button data-cmd="lineSpacing" data-arg="2">2,0</button>
+    <button data-cmd="lineSpacing" data-arg="2.5">2,5</button>
+    <button data-cmd="lineSpacing" data-arg="3">3,0</button>
+    <div class="menu-sep"></div>
+    <button data-cmd="spaceBefore" data-arg="toggle">Abstand vor Absatz hinzufügen/entfernen</button>
+    <button data-cmd="spaceAfter" data-arg="toggle">Abstand nach Absatz hinzufügen/entfernen</button>
+    <div class="menu-sep"></div>
+    <button data-cmd="paragraphDialog">Zeilenabstandsoptionen …</button>
+  </div>
+  <div class="menu" id="borderMenu">
+    <button data-cmd="paraBorder" data-arg="bottom">Rahmenlinie unten</button>
+    <button data-cmd="paraBorder" data-arg="top">Rahmenlinie oben</button>
+    <button data-cmd="paraBorder" data-arg="box">Rahmen außen</button>
+    <button data-cmd="paraBorder" data-arg="none">Kein Rahmen</button>
+  </div>
+  <div class="menu" id="tableMenu">
+    <div class="menu-title" id="tblPickLabel">Tabelle einfügen</div>
+    <div id="tblPicker"></div>
+    <div class="menu-sep"></div>
+    <button data-cmd="tableDialog">Tabelle einfügen …</button>
+  </div>
+  <div class="menu" id="pageNumMenu">
+    <button data-cmd="pageNumber" data-arg="footer-center">Seitenende – zentriert</button>
+    <button data-cmd="pageNumber" data-arg="footer-right">Seitenende – rechts</button>
+    <button data-cmd="pageNumber" data-arg="footer-of">Seitenende – „Seite X von Y“</button>
+    <button data-cmd="pageNumber" data-arg="header-right">Seitenanfang – rechts</button>
+    <div class="menu-sep"></div>
+    <button data-cmd="pageNumber" data-arg="none">Seitenzahlen entfernen</button>
+  </div>
+  <div class="menu" id="symbolMenu">
+    <div class="symbol-grid" id="symbolGrid"></div>
+  </div>
+  <div class="menu" id="marginMenu">
+    <button data-cmd="margins" data-arg="normal"><b>Normal</b><small>Oben 2,5 · Unten 2 · Links 2,5 · Rechts 2,5 cm</small></button>
+    <button data-cmd="margins" data-arg="schmal"><b>Schmal</b><small>alle 1,27 cm</small></button>
+    <button data-cmd="margins" data-arg="mittel"><b>Mittel</b><small>Oben/Unten 2,54 · Links/Rechts 1,91 cm</small></button>
+    <button data-cmd="margins" data-arg="breit"><b>Breit</b><small>Oben/Unten 2,54 · Links/Rechts 5,08 cm</small></button>
+    <button data-cmd="margins" data-arg="din"><b>Brief DIN 5008</b><small>Oben 2,7 · Unten 2 · Links 2,5 · Rechts 2 cm</small></button>
+    <div class="menu-sep"></div>
+    <button data-cmd="pageSetup">Benutzerdefinierte Seitenränder …</button>
+  </div>
+  <div class="menu" id="orientMenu">
+    <button data-cmd="orientation" data-arg="portrait">Hochformat</button>
+    <button data-cmd="orientation" data-arg="landscape">Querformat</button>
+  </div>
+  <div class="menu" id="sizeMenu">
+    <button data-cmd="pageSize" data-arg="A4"><b>A4</b><small>21 × 29,7 cm</small></button>
+    <button data-cmd="pageSize" data-arg="A5"><b>A5</b><small>14,8 × 21 cm</small></button>
+    <button data-cmd="pageSize" data-arg="A3"><b>A3</b><small>29,7 × 42 cm</small></button>
+    <button data-cmd="pageSize" data-arg="Letter"><b>Letter</b><small>21,59 × 27,94 cm</small></button>
+  </div>
+  <div class="menu" id="ctxMenu">
+    <button data-cmd="cut">Ausschneiden</button>
+    <button data-cmd="copy">Kopieren</button>
+    <button data-cmd="paste">Einfügen</button>
+    <div class="menu-sep"></div>
+    <button data-cmd="paragraphDialog">Absatz …</button>
+    <button data-cmd="link">Link …</button>
+    <div class="ctx-table">
+      <div class="menu-sep"></div>
+      <button data-cmd="tblRowBelow">Zeile unterhalb einfügen</button>
+      <button data-cmd="tblColRight">Spalte rechts einfügen</button>
+      <button data-cmd="tblDelRow">Zeile löschen</button>
+      <button data-cmd="tblDelCol">Spalte löschen</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== Dialoge ===================== -->
+<div id="dlgBackdrop" hidden></div>
+<div id="dialogHost"></div>
+
+<div id="toast" hidden></div>
+<input type="file" id="fileOpen" accept=".docx,.txt,.html,.htm" hidden>
+<input type="file" id="fileImage" accept="image/png,image/jpeg,image/gif,image/webp,image/bmp" hidden>
+
+<script src="lib/jszip.min.js"></script>
+<script src="js/icons.js"></script>
+<script src="js/editor.js"></script>
+<script src="js/layout.js"></script>
+<script src="js/docx-export.js"></script>
+<script src="js/docx-import.js"></script>
+<script src="js/ui.js"></script>
+</body>
+</html>
