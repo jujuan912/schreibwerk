@@ -27,6 +27,12 @@ function defaultDoc(){
     header:{text:'',align:'left'},
     footer:{text:'',align:'center'},
     base:{font:'Calibri', size:11, after:8, line:1.08},
+    titlePage:false,                              // erste Seite anders
+    firstHeader:{text:'',align:'left'},
+    firstFooter:{text:'',align:'center'},
+    pageNum:{start:1, fmt:'decimal'},
+    abbr:{},                                      // Abkürzung → Bedeutung
+    comments:{},                                  // id → {text, author, date, done}
     author:'', created:new Date().toISOString()
   };
 }
@@ -262,6 +268,12 @@ SW.cleanClone = function(){
   c.querySelectorAll('tr.sw-gaprow').forEach(g => g.remove());
   c.querySelectorAll('[data-swp]').forEach(el => el.removeAttribute('data-swp'));
   c.querySelectorAll('[data-sw-mt]').forEach(el => el.removeAttribute('data-sw-mt'));
+  c.querySelectorAll('[data-swh]').forEach(el => el.removeAttribute('data-swh'));
+  c.querySelectorAll('.sw-cols-cont').forEach(cont => {
+    const prev = cont.previousElementSibling;
+    if (prev && prev.classList.contains('sw-cols')){ while (cont.firstChild) prev.appendChild(cont.firstChild); cont.remove(); }
+    else cont.classList.remove('sw-cols-cont');
+  });
   c.querySelectorAll('[style=""]').forEach(el => el.removeAttribute('style'));
   c.querySelectorAll('.sw-imgsel').forEach(el => el.classList.remove('sw-imgsel'));
   c.querySelectorAll('.sw-cellsel').forEach(el => el.classList.remove('sw-cellsel'));
@@ -271,7 +283,8 @@ SW.cleanClone = function(){
 };
 SW.cleanHTML = () => SW.cleanClone().innerHTML;
 
-function docState(){ return JSON.stringify({p:SW.doc.pageSize,o:SW.doc.orientation,m:SW.doc.margins,h:SW.doc.header,f:SW.doc.footer,b:SW.doc.base}); }
+const STATE_KEYS = ['pageSize','orientation','margins','header','footer','base','titlePage','firstHeader','firstFooter','pageNum','abbr','comments'];
+function docState(){ const o = {}; STATE_KEYS.forEach(k => o[k] = SW.doc[k]); return JSON.stringify(o); }
 
 SW.commit = function(){
   clearTimeout(H.timer); H.timer = null;
@@ -298,7 +311,7 @@ function restoreSnap(s){
   H.restoring = true;
   ed.innerHTML = s.html;
   const d = JSON.parse(s.doc);
-  Object.assign(SW.doc, {pageSize:d.p, orientation:d.o, margins:d.m, header:d.h, footer:d.f, base:d.b});
+  Object.assign(SW.doc, d);
   SW.fixImages();
   SW.applyBase && SW.applyBase();
   SW.relayout && SW.relayout(true);
@@ -770,8 +783,13 @@ SW.normalizeDoc = function(){
     }
   });
   // Nach Tabelle/Umbruch/TOC am Ende muss ein Absatz folgen
+  // Spaltenabschnitte: leere entfernen, lose Inhalte in Absätze
+  ed.querySelectorAll(':scope > .sw-cols').forEach(c => {
+    if (!c.firstElementChild && !c.textContent.trim()){ const p = document.createElement('p'); p.innerHTML = '<br>'; c.replaceWith(p); return; }
+    Array.from(c.childNodes).forEach(n => { if (n.nodeType === 3 && n.data.trim()){ const p = document.createElement('p'); n.replaceWith(p); p.appendChild(n); } else if (n.nodeType === 1 && n.tagName === 'BR') n.remove(); });
+  });
   const last = ed.lastElementChild;
-  if (last && last.matches('table,.sw-toc,.sw-pagebreak,hr')){
+  if (last && last.matches('table,.sw-toc,.sw-tof,.sw-abbrlist,.sw-cols,.sw-pagebreak,hr')){
     const p = document.createElement('p'); p.innerHTML = '<br>'; ed.appendChild(p);
   }
   // Leere Formatierungs-Spans entfernen

@@ -71,6 +71,7 @@ function classifyStyle(styles, id){
     let m;
     if ((m = n.match(/^(heading|überschrift) (\d)$/))) return {tag:'h' + Math.min(3, +m[2])};
     if (n === 'title' || n === 'titel') return {tag:'p', cls:'sw-title'};
+    if (n === 'caption' || n === 'beschriftung') return {tag:'p', cls:'sw-caption'};
     if (n === 'subtitle' || n === 'untertitel') return {tag:'p', cls:'sw-subtitle'};
     if (n === 'quote' || n === 'zitat' || n === 'intense quote' || n === 'intensives zitat') return {tag:'p', cls:'sw-quote'};
     if (n === 'no spacing' || n === 'kein leerraum') return {tag:'p', cls:'sw-nospace'};
@@ -195,6 +196,15 @@ SW.importDocx = async function(buf){
     const id = attr(f, 'id');
     footnotes[id] = Array.from(f.getElementsByTagNameNS(W, 't')).map(t => t.textContent).join('').trim();
   }
+  const comments = {};
+  const cmXml = await readText(zip, 'word/comments.xml');
+  if (cmXml) for (const c of parseXml(cmXml).getElementsByTagNameNS(W, 'comment')){
+    comments[attr(c, 'id')] = {
+      author:attr(c, 'author') || 'Autor', date:attr(c, 'date') || new Date().toISOString(), done:false,
+      text:Array.from(c.getElementsByTagNameNS(W, 'p')).map(p => Array.from(p.getElementsByTagNameNS(W, 't')).map(t => t.textContent).join('')).join('\n').trim()
+    };
+  }
+  const usedComments = {};
   const images = [];
   const imgCache = {};
   async function imageFor(rid){
@@ -214,7 +224,9 @@ SW.importDocx = async function(buf){
 
   const d = parseXml(docXml);
   const body = d.getElementsByTagNameNS(W, 'body')[0];
-  const sect = kids(body, 'sectPr')[0] || body.getElementsByTagNameNS(W, 'sectPr')[0];
+  const allSects = Array.from(body.getElementsByTagNameNS(W, 'sectPr'));
+  const sect = kids(body, 'sectPr')[0] || allSects[0];
+  const firstSect = allSects.length ? (allSects.find(x => x !== kids(body, 'sectPr')[0]) || allSects[0]) : null;
   const doc = SW.defaultDoc();
   if (styles.defaults.font) doc.base.font = styles.defaults.font;
   if (styles.defaults.size) doc.base.size = styles.defaults.size;
@@ -235,9 +247,16 @@ SW.importDocx = async function(buf){
       doc.margins = {top:c('top'), bottom:c('bottom'), left:c('left'), right:c('right')};
     }
     // Kopf-/Fußzeilen
-    const hf = async (refName, key) => {
-      const refs = kids(sect, refName);
-      const ref = refs.find(r => attr(r, 'type') === 'default') || refs[0];
+    const pnt = kid(firstSect || sect, 'pgNumType') || kid(sect, 'pgNumType');
+    if (pnt){
+      const f = attr(pnt, 'fmt'), st = attr(pnt, 'start');
+      doc.pageNum = {start:st != null ? +st : 1, fmt:['lowerRoman','upperRoman','lowerLetter','upperLetter'].includes(f) ? f : 'decimal'};
+    }
+    if (kid(firstSect || sect, 'titlePg') && onOff(kid(firstSect || sect, 'titlePg'))) doc.titlePage = true;
+    const hf = async (refName, key, type = 'default') => {
+      let refs = [];
+      for (const sx of [sect, ...allSects]){ refs = kids(sx, refName); if (refs.some(r => (attr(r, 'type') || 'default') === type)) break; }
+      const ref = refs.find(r => (attr(r, 'type') || 'default') === type) || (type === 'default' ? refs.find(r => attr(r, 'type') !== 'first') : null);
       if (!ref) return;
       const rel = rels[ref.getAttributeNS(R, 'id')];
       if (!rel) return;
@@ -269,10 +288,92 @@ SW.importDocx = async function(buf){
     };
     await hf('headerReference', 'header');
     await hf('footerReference', 'footer');
+    if (doc.titlePage){ await hf('headerReference', 'firstHeader', 'first'); await hf('footerReference', 'firstFooter', 'first'); }
   }
 
   /* ---------- Absätze ---------- */
-  const fld = {stack:[], skipToc:false, tocEmitted:false};
+  const fld = {stack:[], skipToc:false, tocEmitted:false, cmt:[]};
+  const MNS = 'http://schemas.openxmlformats.org/officeDocument/2006/math';
+  /* Beschriftungsnummer: vorangehendes „Abbildung “ in das Feld übernehmen */
+  function seqHtml(h, type){
+    const re = new RegExp(type.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(\\s|&nbsp;)*((</[a-z]+>)*)$');
+    const m = h.match(re);
+    if (m) h = h.slice(0, m.index) + (m[2] || '');
+    return h + `<span class="sw-seq" data-seq="${esc(type)}" contenteditable="false">${esc(type)} 1</span>`;
+  }
+  /* OMML (Word-Formel) → LaTeX für den Formel-Editor */
+  const NARY_TEX = {'∑':'\\sum', '∏':'\\prod', '∐':'\\coprod', '∫':'\\int', '∬':'\\iint', '∭':'\\iiint', '∮':'\\oint', '⋃':'\\bigcup', '⋂':'\\bigcap'};
+  const ACC_TEX = {'\u0302':'\\hat', '^':'\\hat', '\u20D7':'\\vec', '→':'\\vec', '\u0307':'\\dot', '˙':'\\dot', '\u0308':'\\ddot', '\u0303':'\\tilde', '~':'\\tilde', '\u0305':'\\overline', '¯':'\\overline', '\u030C':'\\check'};
+  const FUNCS = ['sin','cos','tan','cot','ln','log','exp','lim','max','min','sinh','cosh','tanh','arcsin','arccos','arctan','det','dim'];
+  function mk(el, name){ return el ? Array.from(el.children).find(c => c.localName === name && c.namespaceURI === MNS) : null; }
+  function mval(el, name){ const p = mk(el, name); return p ? (p.getAttributeNS(MNS, 'val') ?? p.getAttribute('m:val')) : null; }
+  function texEsc(t){ return t.replace(/\\/g, '\\backslash ').replace(/([{}%#&_$])/g, '\\$1').replace(/\^/g, '\\hat{}'); }
+  function grp(t){ t = t.trim(); return t.length === 1 ? t : `{${t}}`; }
+  function ommlToTex(el){
+    if (!el) return '';
+    let out = '';
+    for (const c of Array.from(el.children)){
+      if (c.namespaceURI !== MNS) continue;
+      const k = c.localName;
+      const pr = mk(c, k + 'Pr');
+      const sub = n => ommlToTex(mk(c, n));
+      switch (k){
+        case 'r': {
+          const t = Array.from(c.getElementsByTagNameNS(MNS, 't')).map(x => x.textContent).join('');
+          const plain = mval(mk(c, 'rPr'), 'sty') === 'p' || (mk(c, 'rPr') && mk(mk(c, 'rPr'), 'nor'));
+          if (plain && /^[A-Za-zÄÖÜäöüß]{2,}$/.test(t.trim())) out += FUNCS.includes(t.trim()) ? `\\${t.trim()} ` : `\\text{${t.trim()}}`;
+          else if (/^[A-Za-zÄÖÜäöüß ]{4,}$/.test(t) && / /.test(t)) out += `\\text{${t}}`;
+          else out += texEsc(t);
+          break;
+        }
+        case 'f': out += mval(pr, 'type') === 'noBar' ? `\\binom{${sub('num')}}{${sub('den')}}` : `\\frac{${sub('num')}}{${sub('den')}}`; break;
+        case 'sSup': out += `${grp(sub('e'))}^{${sub('sup')}}`; break;
+        case 'sSub': out += `${grp(sub('e'))}_{${sub('sub')}}`; break;
+        case 'sSubSup': out += `${grp(sub('e'))}_{${sub('sub')}}^{${sub('sup')}}`; break;
+        case 'sPre': out += `{}_{${sub('sub')}}^{${sub('sup')}}${grp(sub('e'))}`; break;
+        case 'rad': { const deg = sub('deg').trim(); out += deg && mval(pr, 'degHide') !== '1' && mval(pr, 'degHide') !== 'on' ? `\\sqrt[${deg}]{${sub('e')}}` : `\\sqrt{${sub('e')}}`; break; }
+        case 'nary': {
+          const ch = mval(pr, 'chr') || '∫';
+          const s1 = sub('sub').trim(), s2 = sub('sup').trim();
+          out += (NARY_TEX[ch] || ch) + (s1 ? `_{${s1}}` : '') + (s2 ? `^{${s2}}` : '') + ' ' + sub('e');
+          break;
+        }
+        case 'd': {
+          let b = mval(pr, 'begChr'), e = mval(pr, 'endChr');
+          b = b == null ? '(' : b; e = e == null ? ')' : e;
+          const f = x => !x ? '.' : x === '{' ? '\\{' : x === '}' ? '\\}' : x === '|' ? '|' : x === '‖' ? '\\|' : x === '⟨' ? '\\langle' : x === '⟩' ? '\\rangle' : x;
+          const parts = Array.from(c.children).filter(x => x.localName === 'e').map(x => ommlToTex(x));
+          const sep = mval(pr, 'sepChr') || '|';
+          out += `\\left${f(b)} ${parts.join(` ${sep} `)} \\right${f(e)}`;
+          break;
+        }
+        case 'acc': { const ch = mval(pr, 'chr') || '\u0302'; out += `${ACC_TEX[ch] || '\\hat'}{${sub('e')}}`; break; }
+        case 'bar': out += (mval(pr, 'pos') === 'top' ? '\\overline' : '\\underline') + `{${sub('e')}}`; break;
+        case 'func': {
+          const name = sub('fName').trim().replace(/^\\text\{(.*)\}$/, '$1').replace(/^\\(\w+)\s*$/, '$1');
+          out += (FUNCS.includes(name) ? `\\${name}` : `\\operatorname{${name}}`) + ' ' + sub('e');
+          break;
+        }
+        case 'limLow': { const e = sub('e').trim(); out += /^\\?lim\s*$/.test(e) || e === '\\lim' ? `\\lim_{${sub('lim')}}` : `\\underset{${sub('lim')}}{${e}}`; break; }
+        case 'limUpp': out += `\\overset{${sub('lim')}}{${sub('e')}}`; break;
+        case 'groupChr': out += (mval(pr, 'pos') === 'top' ? '\\overbrace' : '\\underbrace') + `{${sub('e')}}`; break;
+        case 'm': {
+          const rows = Array.from(c.children).filter(x => x.localName === 'mr').map(r => Array.from(r.children).filter(x => x.localName === 'e').map(x => ommlToTex(x)).join(' & '));
+          out += `\\begin{matrix} ${rows.join(' \\\\ ')} \\end{matrix}`;
+          break;
+        }
+        case 'eqArr': {
+          const rows = Array.from(c.children).filter(x => x.localName === 'e').map(x => ommlToTex(x));
+          out += `\\begin{aligned} ${rows.join(' \\\\ ')} \\end{aligned}`;
+          break;
+        }
+        case 'box': case 'borderBox': case 'phant': case 'e': case 'oMath': out += sub('e') || ommlToTex(c); break;
+        default:
+          if (!/Pr$/.test(k)) out += ommlToTex(c);
+      }
+    }
+    return out;
+  }
 
   function runStyle(rp){
     const st = [];
@@ -326,12 +427,25 @@ SW.importDocx = async function(buf){
           if (cl === 'fldChar'){
             const t = attr(c, 'fldCharType');
             if (t === 'begin') fld.stack.push({instr:'', phase:1});
-            else if (t === 'separate'){ const f = fld.stack[fld.stack.length - 1]; if (f){ f.phase = 2; if (/^\s*TOC\b/i.test(f.instr)){ f.toc = true; fld.skipToc = true; if (!fld.tocEmitted){ fld.tocEmitted = true; out.toc = true; } } } }
+            else if (t === 'separate'){
+              const f = fld.stack[fld.stack.length - 1];
+              if (f){
+                f.phase = 2;
+                if (/^\s*TOC\b/i.test(f.instr)){
+                  f.toc = true; fld.skipToc = true;
+                  const cm = f.instr.match(/\\c\s+"?([^"\\]+?)"?\s*(\\|$)/);
+                  if (cm) out.tof = cm[1].trim();
+                  else if (!fld.tocEmitted){ fld.tocEmitted = true; out.toc = true; }
+                }
+                const sq = f.instr.match(/^\s*SEQ\s+(\S+)/i);
+                if (sq){ f.seq = sq[1].replace(/"/g, ''); h += wrapHtml(inner, rs); inner = ''; h = seqHtml(h, f.seq); }
+              }
+            }
             else if (t === 'end'){ const f = fld.stack.pop(); if (f && f.toc) fld.skipToc = false; }
             continue;
           }
           if (cl === 'instrText'){ const f = fld.stack[fld.stack.length - 1]; if (f) f.instr += c.textContent; continue; }
-          const inInstr = fld.stack.some(f => f.phase === 1);
+          const inInstr = fld.stack.some(f => f.phase === 1 || (f.phase === 2 && f.seq));
           if (inInstr || fld.skipToc) continue;
           if (cl === 't') inner += esc(c.textContent).replace(/ {2}/g, ' &nbsp;');
           else if (cl === 'tab') inner += '<span class="sw-tab">\t</span>';
@@ -354,7 +468,27 @@ SW.importDocx = async function(buf){
             const ext = c.getElementsByTagNameNS('http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing', 'extent')[0];
             const wpx = ext ? Math.round(+ext.getAttribute('cx') / 9525) : null;
             const id = rid ? await imageFor(rid) : null;
-            if (id) inner += `<img data-img-id="${id}" alt=""${wpx ? ` style="width:${wpx}px"` : ''}>`;
+            const WP = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing';
+            const anc = c.getElementsByTagNameNS(WP, 'anchor')[0];
+            let wrapAttr = '', posCss = '';
+            if (anc){
+              const has = n2 => anc.getElementsByTagNameNS(WP, n2).length > 0;
+              const ph = anc.getElementsByTagNameNS(WP, 'positionH')[0], pv = anc.getElementsByTagNameNS(WP, 'positionV')[0];
+              const al = ph && ph.getElementsByTagNameNS(WP, 'align')[0];
+              const ox = ph && ph.getElementsByTagNameNS(WP, 'posOffset')[0], oy = pv && pv.getElementsByTagNameNS(WP, 'posOffset')[0];
+              const xpx = ox ? Math.round(+ox.textContent / 9525) : 0, ypx = oy ? Math.round(+oy.textContent / 9525) : 0;
+              const contentPx = ((SW.PAGE_SIZES[doc.pageSize] || [21])[doc.orientation === 'landscape' ? 1 : 0] - doc.margins.left - doc.margins.right) * SW.CM;
+              if (has('wrapSquare') || has('wrapTight') || has('wrapThrough')){
+                const right = al ? /right|outside/.test(al.textContent) : xpx + (wpx || 0) / 2 > contentPx / 2;
+                wrapAttr = ` data-wrap="${right ? 'right' : 'left'}"`;
+              } else if (has('wrapTopAndBottom')) wrapAttr = ' data-wrap="topbottom"';
+              else {
+                wrapAttr = ` data-wrap="${anc.getAttribute('behindDoc') === '1' ? 'behind' : 'front'}"`;
+                const left = al ? (/center/.test(al.textContent) ? (contentPx - (wpx || 0)) / 2 : /right/.test(al.textContent) ? contentPx - (wpx || 0) : 0) : xpx;
+                posCss = `;left:${Math.round(left)}px;top:${ypx}px`;
+              }
+            }
+            if (id) inner += `<img data-img-id="${id}" alt=""${wrapAttr}${wpx || posCss ? ` style="${wpx ? `width:${wpx}px` : ''}${posCss}"` : ''}>`;
             else {
               // Textfelder in Formen: Text übernehmen
               const tx = Array.from(c.getElementsByTagNameNS(W, 'txbxContent'));
@@ -362,7 +496,8 @@ SW.importDocx = async function(buf){
             }
           }
         }
-        h += wrapHtml(inner, rs);
+        const piece = wrapHtml(inner, rs);
+        h += piece && fld.cmt.length ? `<span class="sw-cmt" data-cid="w${fld.cmt[fld.cmt.length - 1]}">${piece}</span>` : piece;
         continue;
       }
       if (ln === 'hyperlink'){
@@ -374,7 +509,20 @@ SW.importDocx = async function(buf){
         h += href ? `<a href="${esc(href)}">${inner}</a>` : inner;
         continue;
       }
-      if (ln === 'fldSimple'){ h += await runsHtml(n, baseRs, out); continue; }
+      if (ln === 'fldSimple'){
+        const instr = attr(n, 'instr') || '';
+        const sq = instr.match(/^\s*SEQ\s+(\S+)/i);
+        if (sq){ h = seqHtml(h, sq[1].replace(/"/g, '')); continue; }
+        h += await runsHtml(n, baseRs, out); continue;
+      }
+      if (ln === 'commentRangeStart'){ const id = attr(n, 'id'); if (comments[id]){ fld.cmt.push(id); usedComments[id] = true; } continue; }
+      if (ln === 'commentRangeEnd'){ const id = attr(n, 'id'); fld.cmt = fld.cmt.filter(x => x !== id); continue; }
+      if (ln === 'oMath' || ln === 'oMathPara'){
+        const maths = ln === 'oMathPara' ? Array.from(n.getElementsByTagNameNS(MNS, 'oMath')) : [n];
+        maths.forEach(m => { const tex = ommlToTex(m).trim(); if (tex) h += `<span class="sw-math" contenteditable="false" data-tex="${esc(tex)}">${esc(tex)}</span>`; });
+        if (ln === 'oMathPara') out.mathPara = true;
+        continue;
+      }
       if (ln === 'smartTag' || ln === 'ins' || ln === 'sdt' || ln === 'customXml' || ln === 'sdtContent' || ln === 'moveTo'){
         const c = ln === 'sdt' ? kid(n, 'sdtContent') : n;
         if (c) h += await runsHtml(c, baseRs, out);
@@ -468,7 +616,15 @@ SW.importDocx = async function(buf){
       const content = pt.trim() ? pt : '<br>';
       return (i > 0 ? '<div class="sw-pagebreak" contenteditable="false"></div>' : '') + (i > 0 && !pt.trim() && i === parts.length - 1 ? '' : `<${tag}${attrs}>${content}</${tag}>`);
     }).join('');
-    return {html:(pageBreakBefore ? '<div class="sw-pagebreak" contenteditable="false"></div>' : '') + html, num, inner, tag, attrs, toc:out.toc};
+    let html2 = html;
+    if (!num && inner.includes('sw-math') && (out.mathPara || !inner.replace(/<span class="sw-math"[^>]*>.*?<\/span>/g, '').replace(/<[^>]+>/g, '').replace(/&nbsp;|\s/g, ''))){
+      html2 = html2.replace(/^<p( class="([^"]*)")?/, (m0, a, cls) => `<p class="${((cls || '') + ' sw-mathblock').trim()}"`);
+    }
+    // Abschnittsende mit Spalten?
+    const sp = pp && kid(pp, 'sectPr');
+    let sectCols = null;
+    if (sp){ const co = kid(sp, 'cols'); sectCols = {n:co ? +(attr(co, 'num') || 1) : 1, line:co ? attr(co, 'sep') === '1' || attr(co, 'sep') === 'true' : false}; }
+    return {html:(pageBreakBefore ? '<div class="sw-pagebreak" contenteditable="false"></div>' : '') + html2, num, inner, tag, attrs, toc:out.toc, tof:out.tof, sectCols};
   }
 
   async function cellHtml(tc){ return await blocksHtml(tc); }
@@ -538,8 +694,14 @@ SW.importDocx = async function(buf){
     return h + '</tbody></table>';
   }
 
-  async function blocksHtml(container){
+  async function blocksHtml(container, isBody){
     let html = '';
+    let secStart = 0;
+    const endSection = cols => {
+      if (!isBody || !cols || cols.n <= 1) { secStart = html.length; return; }
+      html = html.slice(0, secStart) + `<div class="sw-cols" data-n="${Math.min(4, cols.n)}"${cols.line ? ' data-line="1"' : ''}>` + html.slice(secStart) + '</div>';
+      secStart = html.length;
+    };
     // Listen-Stapel
     let stack = [];   // {numId, lvl, tag}
     const closeAll = () => { let s = ''; while (stack.length) s += `</li></${stack.pop().tag}>`; return s; };
@@ -550,9 +712,17 @@ SW.importDocx = async function(buf){
       const ln = n.localName;
       if (ln === 'p'){
         const r = await paraHtml(n);
-        if (r.skip) continue;
+        if (r.skip){ if (r.sectCols){ html += closeAll(); endSection(r.sectCols); } continue; }
+        if (r.tof){ html += closeAll() + `<div class="sw-tof" data-seq="${esc(r.tof)}" contenteditable="false"></div>`; continue; }
         if (r.toc){ html += closeAll() + '<div class="sw-toc" contenteditable="false"></div>'; continue; }
         if (fld.skipToc) continue;
+        if (r.sectCols){
+          // Absatz gehört noch zum endenden Abschnitt
+          if (r.num){ /* selten – als normaler Absatz behandeln */ }
+          html += closeAll() + (r.inner.replace(/<[^>]+>/g, '').trim() || r.inner.includes('<img') ? r.html : '');
+          endSection(r.sectCols);
+          continue;
+        }
         if (r.num){
           const levels = numbering[r.num.id];
           const lv = levels[r.num.lvl] || levels['0'];
@@ -576,10 +746,12 @@ SW.importDocx = async function(buf){
       if (ln === 'tbl'){ html += closeAll() + await tableHtml(n); continue; }
     }
     html += closeAll();
+    if (isBody && sect){ const co = kid(sect, 'cols'); if (co && +(attr(co, 'num') || 1) > 1) endSection({n:+attr(co, 'num'), line:attr(co, 'sep') === '1'}); }
     return html;
   }
 
-  let html = await blocksHtml(body);
+  let html = await blocksHtml(body, true);
+  Object.keys(usedComments).forEach(id => { doc.comments['w' + id] = comments[id]; });
   // Fußnoten-Markierung korrekt nummerieren erfolgt im Layout
   if (!html.trim()) html = '<p><br></p>';
   return {html, doc, images, exact:false};

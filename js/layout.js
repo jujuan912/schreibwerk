@@ -48,14 +48,31 @@ function applyGeometry(g){
 const pushSheet = document.createElement('style');
 pushSheet.id = 'swPushStyle';
 document.head.appendChild(pushSheet);
-let pushRules = {}, pushSeq = 0;
+let pushRules = {}, heightRules = {}, pushSeq = 0;
+function writeSheet(){
+  pushSheet.textContent = Object.entries(pushRules).map(([k, v]) => `#editor [data-swp="${k}"]{margin-top:${v.toFixed(2)}px !important}`).join('')
+    + Object.entries(heightRules).map(([k, v]) => `#editor [data-swh="${k}"]{height:${v.toFixed(2)}px;column-fill:auto}`).join('');
+}
 function setPush(el, px){
   let id = el.getAttribute('data-swp');
   if (!id){ id = String(++pushSeq); el.setAttribute('data-swp', id); }
   pushRules[id] = px;
-  pushSheet.textContent = Object.entries(pushRules).map(([k, v]) => `#editor [data-swp="${k}"]{margin-top:${v.toFixed(2)}px !important}`).join('');
+  writeSheet();
+}
+function setHeight(el, px){
+  let id = el.getAttribute('data-swh');
+  if (!id){ id = String(++pushSeq); el.setAttribute('data-swh', id); }
+  if (px == null) delete heightRules[id]; else heightRules[id] = px;
+  writeSheet();
 }
 function clearArtifacts(){
+  ed.querySelectorAll('.sw-cols-cont').forEach(cont => {
+    const prev = cont.previousElementSibling;
+    if (prev && prev.classList.contains('sw-cols')){ while (cont.firstChild) prev.appendChild(cont.firstChild); cont.remove(); }
+    else cont.classList.remove('sw-cols-cont');
+  });
+  ed.querySelectorAll('[data-swh]').forEach(el => el.removeAttribute('data-swh'));
+  heightRules = {};
   ed.querySelectorAll('.sw-gap').forEach(g => {
     const p = g.parentNode; g.remove();
     p && p.normalize();
@@ -78,6 +95,7 @@ function units(){
   };
   for (const el of ed.children){
     if (el.classList.contains('sw-pagebreak')) { out.push({el, kind:'break'}); continue; }
+    if (el.classList.contains('sw-cols')) { out.push({el, kind:'cols'}); continue; }
     if (el.tagName === 'UL' || el.tagName === 'OL'){ addList(el); continue; }
     if (el.tagName === 'TABLE'){
       const rows = el.rows;
@@ -93,7 +111,7 @@ function units(){
 }
 function isSplittable(el){
   if (!el.matches('p,h1,h2,h3,h4,h5,h6,li,blockquote,pre')) return false;
-  if (el.querySelector('img,table,ul,ol')) return false;
+  if (el.querySelector('img,table,ul,ol,.sw-math')) return false;
   return el.textContent.length > 0;
 }
 
@@ -102,6 +120,51 @@ let paperTop = 0, Z = 1;
 function rectOf(el){
   const r = el.getBoundingClientRect();
   return {top:(r.top - paperTop)/Z, bottom:(r.bottom - paperTop)/Z, height:r.height/Z};
+}
+
+/* Rechteck einer Einheit inkl. umflossener Bilder, die unten herausragen */
+function unitRect(el){
+  const r = rectOf(el);
+  if (el.querySelector && el.querySelector('img[data-wrap="left"],img[data-wrap="right"]')){
+    el.querySelectorAll('img[data-wrap="left"],img[data-wrap="right"]').forEach(i => { r.bottom = Math.max(r.bottom, rectOf(i).bottom); });
+  }
+  return r;
+}
+
+/* Spaltenabschnitt auf Seiten verteilen: Spalten füllen sich nacheinander,
+   Überhang wandert in eine Fortsetzung auf der nächsten Seite */
+function splitCols(el, page, P){
+  let guard = 0;
+  while (guard++ < 60){
+    const r = rectOf(el);
+    if (r.top >= P.bot(page) - 20){ pushTo({el, kind:'block'}, P.top(page + 1)); page++; continue; }
+    if (r.bottom <= P.bot(page) + 0.5) return page;
+    const avail = P.bot(page) - r.top - (parseFloat(getComputedStyle(el).marginTop) > 0 ? 0 : 0);
+    setHeight(el, Math.max(20, avail - 1));
+    const right = el.getBoundingClientRect().right;
+    const kids = Array.from(el.children);
+    let cut = -1;
+    for (let i = 0; i < kids.length; i++){
+      const rs = kids[i].getClientRects();
+      const last = rs[rs.length - 1];
+      if (!last) continue;
+      if (last.left >= right - 2){ cut = i; break; }
+    }
+    if (cut <= 0){                     // nichts sinnvoll verschiebbar
+      if (cut === 0 && r.top > P.top(page) + 1){ setHeight(el, null); pushTo({el, kind:'block'}, P.top(page + 1)); page++; continue; }
+      if (cut === 0){ setHeight(el, null); return page; }
+      return page;
+    }
+    const cont = el.cloneNode(false);
+    cont.removeAttribute('data-swp'); cont.removeAttribute('data-swh');
+    cont.classList.add('sw-cols-cont');
+    kids.slice(cut).forEach(k => cont.appendChild(k));
+    el.after(cont);
+    pushTo({el:cont, kind:'block'}, P.top(page + 1));
+    page++;
+    el = cont;
+  }
+  return page;
 }
 
 /* Vergrößert den oberen Abstand eines Elements, bis es bei target beginnt */
@@ -230,7 +293,7 @@ function paginate(g, fnH){
   for (let i = 0; i < U.length; i++){
     const u = U[i];
     if (u.kind === 'break'){ force = true; continue; }
-    let r = rectOf(u.el);
+    let r = unitRect(u.el);
     while (r.top >= (page + 1)*step - 0.5) page++;
     if (force){
       force = false;
@@ -244,6 +307,7 @@ function paginate(g, fnH){
         pushTo(u, P.top(page + 1)); page++; r = rectOf(u.el);
       }
     }
+    if (u.kind === 'cols'){ page = splitCols(u.el, page, P); continue; }
     if (r.bottom > P.bot(page) + 0.5){
       if (u.split){
         const endPage = splitBlock(u.el, page, P);
@@ -296,30 +360,95 @@ function fnPages(fns, g){
   return per;
 }
 
+/* ---------- Seitenzahlen ---------- */
+function roman(n){
+  if (n <= 0) return String(n);
+  const m = [[1000,'m'],[900,'cm'],[500,'d'],[400,'cd'],[100,'c'],[90,'xc'],[50,'l'],[40,'xl'],[10,'x'],[9,'ix'],[5,'v'],[4,'iv'],[1,'i']];
+  let s = ''; for (const [v, r] of m) while (n >= v){ s += r; n -= v; } return s;
+}
+function letter(n){ let s = ''; while (n > 0){ n--; s = String.fromCharCode(97 + n % 26) + s; n = Math.floor(n / 26); } return s || '0'; }
+SW.formatNum = function(n, fmt){
+  if (fmt === 'lowerRoman') return roman(n);
+  if (fmt === 'upperRoman') return roman(n).toUpperCase();
+  if (fmt === 'lowerLetter') return letter(n);
+  if (fmt === 'upperLetter') return letter(n).toUpperCase();
+  return String(n);
+};
+/* Angezeigte Seitenzahl der physischen Seite i (0-basiert) */
+SW.pageLabel = function(i){
+  const pn = SW.doc.pageNum || {start:1, fmt:'decimal'};
+  return SW.formatNum((pn.start ?? 1) + i, pn.fmt);
+};
+function pageOf(el, g){ return Math.max(0, Math.floor(rectOf(el).top / (g.H + GAP))); }
+
+/* ---------- Felder vor dem Umbruch: Nummern, Abkürzungsverzeichnis ---------- */
+SW.SEQ_HEADS = {Abbildung:'Abbildungsverzeichnis', Tabelle:'Tabellenverzeichnis', Formel:'Formelverzeichnis'};
+function renderPreFields(){
+  const cnt = {};
+  SW.$$('.sw-seq', ed).forEach(s => {
+    const t = s.dataset.seq || 'Abbildung';
+    cnt[t] = (cnt[t] || 0) + 1;
+    const txt = `${t} ${cnt[t]}`;
+    if (s.textContent !== txt) s.textContent = txt;
+  });
+  const lists = SW.$$('.sw-abbrlist', ed);
+  if (lists.length){
+    const ab = SW.doc.abbr || {};
+    const keys = Object.keys(ab).sort((a, b) => a.localeCompare(b, 'de', {sensitivity:'base'}));
+    const html = '<div class="toc-head">Abkürzungsverzeichnis</div>' + (keys.length
+      ? '<table class="abbr-table"><tbody>' + keys.map(k => `<tr><td>${SW.esc(k)}</td><td>${SW.esc(ab[k])}</td></tr>`).join('') + '</tbody></table>'
+      : '<div class="toc-empty">Noch keine Abkürzungen – Referenzen → „Abkürzung definieren“.</div>');
+    lists.forEach(l => { if (l.innerHTML !== html) l.innerHTML = html; });
+  }
+}
+SW.renderPreFields = renderPreFields;
+
 /* ---------- Inhaltsverzeichnis ---------- */
 function tocEntries(g){
   const step = g.H + GAP;
   return SW.$$('h1,h2,h3', ed).filter(h => !h.closest('.sw-toc') && h.textContent.trim()).map(h => ({
-    h, lvl:+h.tagName[1], text:h.textContent.replace(/​/g, '').trim(),
-    page: Math.floor(rectOf(h).top / step) + 1
+    h, lvl:+h.tagName[1], text:h.textContent.replace(/\u200B/g, '').trim(),
+    page: Math.floor(rectOf(h).top / step) + 1,
+    label: SW.pageLabel(Math.floor(rectOf(h).top / step))
   }));
 }
+function tofEntries(g, type){
+  const step = g.H + GAP;
+  return SW.$$('p.sw-caption', ed).filter(c => { const s = c.querySelector('.sw-seq'); return s && (s.dataset.seq || 'Abbildung') === type; }).map(c => ({
+    h:c, text:c.textContent.replace(/\u200B/g, '').trim(),
+    label: SW.pageLabel(Math.floor(rectOf(c).top / step))
+  }));
+}
+SW.tofEntries = type => tofEntries(SW.geo(), type);
 function renderTocs(g){
   const tocs = SW.$$('.sw-toc', ed);
-  if (!tocs.length) return false;
+  if (!tocs.length) return renderTofs(g);
+  const tf = renderTofs(g);
   const ents = tocEntries(g);
   const html = '<div class="toc-head">Inhaltsverzeichnis</div>' + (ents.length
-    ? ents.map((e, i) => `<div class="toc-row l${e.lvl}" data-i="${i}"><span class="toc-t">${SW.esc(e.text)}</span><span class="toc-dots"></span><span class="toc-p">${e.page}</span></div>`).join('')
+    ? ents.map((e, i) => `<div class="toc-row l${e.lvl}" data-i="${i}"><span class="toc-t">${SW.esc(e.text)}</span><span class="toc-dots"></span><span class="toc-p">${e.label}</span></div>`).join('')
     : '<div class="toc-empty">Keine Einträge gefunden – formatieren Sie Überschriften mit „Überschrift 1–3“.</div>');
   let changed = false;
   tocs.forEach(t => { if (t.innerHTML !== html){ t.innerHTML = html; changed = true; } });
+  return changed || tf;
+}
+function renderTofs(g){
+  let changed = false;
+  SW.$$('.sw-tof', ed).forEach(t => {
+    const type = t.dataset.seq || 'Abbildung';
+    const ents = tofEntries(g, type);
+    const html = `<div class="toc-head">${SW.SEQ_HEADS[type] || type + 'verzeichnis'}</div>` + (ents.length
+      ? ents.map((e, i) => `<div class="toc-row" data-cap="${i}"><span class="toc-t">${SW.esc(e.text)}</span><span class="toc-dots"></span><span class="toc-p">${e.label}</span></div>`).join('')
+      : `<div class="toc-empty">Keine Einträge – fügen Sie über Referenzen → „Beschriftung einfügen“ ${type === 'Tabelle' ? 'Tabellen' : 'Abbildungen'}beschriftungen ein.</div>`);
+    if (t.innerHTML !== html){ t.innerHTML = html; changed = true; }
+  });
   return changed;
 }
 SW.tocEntries = () => tocEntries(SW.geo());
 
 /* ---------- Seitenhintergründe ---------- */
 function hfText(tpl, i, n){
-  return (tpl || '').replace(/\{SEITE\}/g, i + 1).replace(/\{SEITEN\}/g, n);
+  return (tpl || '').replace(/\{SEITE\}/g, SW.pageLabel(i)).replace(/\{SEITEN\}/g, n);
 }
 function renderPages(g, n, fnPer){
   const step = g.H + GAP;
@@ -335,12 +464,17 @@ function renderPages(g, n, fnPer){
     d.style.top = (i*step) + 'px';
     d.style.height = g.H + 'px';
     const h = d.children[0], f = d.children[1], fa = d.children[2];
-    h.style.cssText = `left:${g.ml}px;width:${g.cw}px;top:${g.hdr}px;text-align:${D.header.align}`;
-    f.style.cssText = `left:${g.ml}px;width:${g.cw}px;bottom:${g.ftr}px;text-align:${D.footer.align}`;
-    h.textContent = hfText(D.header.text, i, n);
-    f.textContent = hfText(D.footer.text, i, n);
-    h.classList.toggle('empty', !D.header.text);
-    f.classList.toggle('empty', !D.footer.text);
+    const first = i === 0 && D.titlePage;
+    const HD = first ? (D.firstHeader || {text:'', align:'left'}) : D.header;
+    const FT = first ? (D.firstFooter || {text:'', align:'center'}) : D.footer;
+    h.style.cssText = `left:${g.ml}px;width:${g.cw}px;top:${g.hdr}px;text-align:${HD.align}`;
+    f.style.cssText = `left:${g.ml}px;width:${g.cw}px;bottom:${g.ftr}px;text-align:${FT.align}`;
+    h.textContent = hfText(HD.text, i, n);
+    f.textContent = hfText(FT.text, i, n);
+    h.classList.toggle('empty', !HD.text);
+    f.classList.toggle('empty', !FT.text);
+    h.dataset.ph = first ? 'Kopfzeile erste Seite – doppelklicken' : 'Kopfzeile – doppelklicken zum Bearbeiten';
+    f.dataset.ph = first ? 'Fußzeile erste Seite – doppelklicken' : 'Fußzeile – doppelklicken zum Bearbeiten';
     const fns = fnPer[i] || [];
     if (fns.length){
       fa.hidden = false;
@@ -367,6 +501,7 @@ SW.relayout = function(keepSel){
   paperTop = paper.getBoundingClientRect().top;
 
   clearArtifacts();
+  renderPreFields();
   let fns = measureFootnotes(g);
   let fnH = [];
   let n = paginate(g, fnH);
@@ -400,7 +535,7 @@ SW.requestLayout = function(delay=60){
 /* ---------- Zoom ---------- */
 function updateZoomBox(g, n){
   const step = g.H + GAP;
-  zoomBox.style.width = (g.W * SW.zoom) + 'px';
+  zoomBox.style.width = ((g.W + (SW.sidePaneWidth ? SW.sidePaneWidth() : 0)) * SW.zoom) + 'px';
   zoomBox.style.height = ((n || SW.pageCount || 1) * step - GAP) * SW.zoom + 'px';
   paper.style.transform = `scale(${SW.zoom})`;
 }

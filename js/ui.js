@@ -4,7 +4,7 @@
 (function(){
 'use strict';
 const SW = window.SW, ed = SW.ed, $ = SW.$, $$ = SW.$$;
-const VERSION = '1.0.0';
+const VERSION = '1.1.0';
 const canvas = $('#canvas');
 
 /* ---------------- Icons ---------------- */
@@ -412,6 +412,7 @@ handles.hidden = true;
 handles.innerHTML = '<span class="h tl"></span><span class="h tr"></span><span class="h bl"></span><span class="h br"></span>';
 $('#paper').appendChild(handles);
 SW.selectedImage = () => selImg && ed.contains(selImg) ? selImg : null;
+SW.selectImage = img => selectImage(img);
 function selectImage(img){
   if (selImg) selImg.classList.remove('sw-imgsel');
   selImg = img;
@@ -454,7 +455,7 @@ handles.addEventListener('mousedown', e => {
   addEventListener('mousemove', mv); addEventListener('mouseup', up);
 });
 ed.addEventListener('mousedown', e => {
-  if (e.target.tagName === 'IMG'){ e.preventDefault(); ed.focus({preventScroll:true}); selectImage(e.target); return; }
+  if (e.target.tagName === 'IMG'){ e.preventDefault(); ed.focus({preventScroll:true}); selectImage(e.target); SW.startImageDrag && SW.startImageDrag(e, e.target); return; }
   if (selImg) selectImage(null);
 });
 function setImgCm(w, h){
@@ -580,6 +581,7 @@ ed.addEventListener('click', e => {
 
 /* ---------------- Befehle ---------------- */
 const C = {};
+SW.C = C;
 SW.cmd = function(name, arg){
   const f = C[name];
   if (!f){ console.warn('Unbekannter Befehl', name); return; }
@@ -1286,7 +1288,8 @@ ed.addEventListener('input', e => {
     const b = r && SW.innermostBlock(r.startContainer);
     if (b && !b.textContent.trim()){
       // Titel/Untertitel/Zitat → nächster Absatz „Standard“ (wie Word)
-      ['sw-title','sw-subtitle','sw-quote'].forEach(c => b.classList.remove(c));
+      ['sw-title','sw-subtitle','sw-quote','sw-caption','sw-mathblock'].forEach(c => b.classList.remove(c));
+      b.querySelectorAll('.sw-seq,.sw-math').forEach(x => x.remove());
       if (!b.getAttribute('class')) b.removeAttribute('class');
       if (/^H\d$/.test(b.tagName) && b.previousElementSibling && b.previousElementSibling.tagName === b.tagName){ const p = SW.retag(b, 'p'); const nr = document.createRange(); nr.setStart(p, 0); nr.collapse(true); getSelection().removeAllRanges(); getSelection().addRange(nr); }
       b.removeAttribute('data-swp');
@@ -1496,6 +1499,7 @@ function loadDocument(html, doc, images){
   ed.innerHTML = html || '<p><br></p>';
   SW.fixImages();
   SW.normalizeDoc();
+  SW.renderAllMath && SW.renderAllMath();
   // Tabellen ohne Spaltengruppe ergänzen
   $$('table', ed).forEach(t => { if (!t.querySelector(':scope > colgroup')){ const n = Math.max(1, ...Array.from(t.rows).map(r => Array.from(r.cells).reduce((s, c) => s + (c.colSpan || 1), 0))); setCols(t, n); } });
   SW.applyBase();
@@ -1773,6 +1777,7 @@ const TEMPLATES = {
 };
 
 /* ---------------- Start ---------------- */
+SW.paintIcons = paintIcons;
 paintIcons();
 try { if (localStorage.getItem('sw-dark')) document.documentElement.classList.add('dark'); } catch(e){}
 document.execCommand('defaultParagraphSeparator', false, 'p');

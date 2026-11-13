@@ -29,13 +29,13 @@ Alternativ `Schreibwerk starten.bat` doppelklicken.
 |---|---|
 | **Datei** | Neu (leer, Brief DIN 5008, Bericht, Protokoll), Öffnen (.docx, .txt, .html), Speichern, Speichern unter, Als PDF exportieren, Drucken, Info |
 | **Start** | Einfügen/Ausschneiden/Kopieren, Format übertragen, Schriftart, Schriftgrad, größer/kleiner, Groß-/Kleinschreibung, Formatierung löschen, Fett, Kursiv, Unterstrichen, Durchgestrichen, Hoch-/Tiefgestellt, Hervorhebung, Schriftfarbe, Aufzählung (6 Zeichen), Nummerierung (6 Formate, mehrstufig), Einzug, Formatierungszeichen, Ausrichtung, Zeilen-/Absatzabstand, Schattierung, Rahmenlinien, Formatvorlagen, Suchen, Ersetzen, Markieren |
-| **Einfügen** | Seitenumbruch, Tabelle (Raster oder Dialog), Bilder, Link, Kopf- und Fußzeile, Seitenzahlen („Seite X von Y“), Datum und Uhrzeit, horizontale Linie, Textrahmen, Symbole |
-| **Layout** | Seitenränder (Normal, Schmal, Mittel, Breit, DIN 5008, benutzerdefiniert), Hoch-/Querformat, A4/A5/A3/Letter, Einzug und Abstand |
-| **Referenzen** | Automatisches Inhaltsverzeichnis (wird in Word als echtes Verzeichnisfeld gespeichert), Fußnoten |
-| **Überprüfen** | Rechtschreibprüfung (Deutsch), Wörter zählen |
+| **Einfügen** | Seitenumbruch, Tabelle (Raster oder Dialog), Bilder, Link, Kommentar, Kopf- und Fußzeile mit „Erste Seite anders“ (Deckblatt), Seitenzahlen (Position, Format 1/i/I/a/A, Beginnen bei, „Seite X von Y“), Datum und Uhrzeit, horizontale Linie, Textrahmen, **Formel-Editor**, Symbole |
+| **Layout** | Seitenränder (Normal, Schmal, Mittel, Breit, DIN 5008, benutzerdefiniert), Hoch-/Querformat, A4/A5/A3/Letter, **Textspalten** (1–3, mit Trennlinie), Einzug und Abstand |
+| **Referenzen** | Automatisches Inhaltsverzeichnis (wird in Word als echtes Verzeichnisfeld gespeichert), Fußnoten, **Beschriftungen** (Abbildung/Tabelle/Formel, automatisch nummeriert), **Abbildungs-, Tabellen- und Formelverzeichnis**, **Abkürzungen** definieren/verwalten/im Text suchen und **Abkürzungsverzeichnis** |
+| **Überprüfen** | Rechtschreibprüfung (Deutsch), Wörter zählen, **Kommentare am Rand** (anlegen, bearbeiten, erledigt, löschen, vor/zurück) – werden als echte Word-Kommentare gespeichert |
 | **Ansicht** | Lineal (Seitenränder und Einzüge ziehen), Navigationsbereich, Zoom, Dunkelmodus, Tastenkürzel |
 | **Tabellenlayout** | Zeilen/Spalten einfügen und löschen, Zellen verbinden/teilen, Spalten verteilen, Spaltenbreite ziehen, Überschriftenzeile, Rahmen, Zellschattierung |
-| **Bildformat** | Größe in cm, Griffe zum Ziehen, Ausrichtung, Rahmen |
+| **Bildformat** | Größe in cm, Griffe zum Ziehen, Zuschneiden, Textumbruch (in Zeile, Quadrat links/rechts, oben und unten, vor/hinter den Text), Bild mit der Maus frei verschieben, Ausrichtung, Rahmen |
 
 Echte Seitenansicht mit automatischen Seitenumbrüchen, Schusterjungen-/Hurenkinderregel und Überschriften, die nicht allein am Seitenende stehen.
 
@@ -48,8 +48,12 @@ Brave sperrt standardmäßig die Schnittstelle zum direkten Überschreiben von D
 
 ## Grenzen gegenüber Word
 
-Nicht enthalten sind Kommentare, Änderungen nachverfolgen, Textspalten, Formen/SmartArt, Diagramme und Formeln. Beim Öffnen fremder Word-Dateien werden solche Elemente vereinfacht. Dateien, die mit Schreibwerk gespeichert wurden, öffnen sich verlustfrei.
+Nicht enthalten sind Änderungen nachverfolgen, Formen/SmartArt, Diagramme, Querverweise, Literaturverzeichnis und Serienbriefe. Beim Öffnen fremder Word-Dateien werden solche Elemente vereinfacht. Dateien, die mit Schreibwerk gespeichert wurden, öffnen sich verlustfrei.
 
 ## Technik
 
-Reines HTML/CSS/JavaScript. Verwendet [JSZip](https://stuk.github.io/jszip/) (MIT) und Symbole von [Lucide](https://lucide.dev) (ISC) – beide liegen lokal im Ordner `lib/` bzw. `js/icons.js`.
+Reines HTML/CSS/JavaScript. Verwendet [JSZip](https://stuk.github.io/jszip/) (MIT), [Temml](https://temml.org) für Formeln (MIT) und Symbole von [Lucide](https://lucide.dev) (ISC) – alles liegt lokal im Ordner `lib/` bzw. `js/icons.js`.
+
+## Formeln
+
+Formeln werden in LaTeX-Schreibweise eingegeben (mit Knöpfen für Bruch, Wurzel, Summe, griechische Buchstaben …) und als echte, in Word bearbeitbare Formeln gespeichert. Beispiel: `U = R \cdot I` oder `x_{1,2} = \frac{-b \pm \sqrt{b^{2}-4ac}}{2a}`.
